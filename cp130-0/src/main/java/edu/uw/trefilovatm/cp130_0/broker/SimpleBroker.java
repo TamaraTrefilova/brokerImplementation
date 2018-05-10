@@ -2,6 +2,8 @@ package edu.uw.trefilovatm.cp130_0.broker;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiPredicate;
+import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import edu.uw.ext.framework.account.Account;
@@ -12,6 +14,7 @@ import edu.uw.ext.framework.broker.BrokerException;
 import edu.uw.ext.framework.broker.OrderManager;
 import edu.uw.ext.framework.broker.OrderQueue;
 import edu.uw.ext.framework.exchange.ExchangeEvent;
+import edu.uw.ext.framework.exchange.ExchangeListener;
 import edu.uw.ext.framework.exchange.StockExchange;
 import edu.uw.ext.framework.exchange.StockQuote;
 import edu.uw.ext.framework.order.MarketBuyOrder;
@@ -28,28 +31,65 @@ import edu.uw.trefilovatm.cp130_0.account.AccountImpl;
  *
  * @author tamara
  */
-public class SimpleBroker implements Broker {
+public class SimpleBroker implements Broker, ExchangeListener {
 
 	private static Logger log = Logger.getLogger(SimpleBroker.class.getName());
 	private String name;
 	private AccountManager acctMngr;
 	private StockExchange exch;
-//	private OrderManagerImpl orderMngr;
-	private static Map<String, OrderManager> orderManagerMap = new HashMap<>();
-	private static OrderQueue<Boolean, Order> marketOrders = new OrderQueueImpl<Boolean, Order>(null, null);
+	private Map<String, OrderManager> orderManagerMap = new HashMap<>();
+	private OrderQueue<Boolean, Order> marketOrders = new OrderQueueImpl<Boolean, Order>(false, 
+			new BiPredicate<Boolean, Order>() {
+				@Override
+				public boolean test(Boolean t, Order u) {
+					return t;
+				}});
 
+	Consumer<Order> processor = new Consumer<Order>(){
+		@Override
+		public void accept(Order order) {
+			int price = exch.executeTrade(order);
+			creditAccount(order.getAccountId(), order, price);
+			log.info("Executed:"+order+" by "+price);
+		}};
+
+	Consumer<StopBuyOrder> processorBuy = new Consumer<StopBuyOrder>(){
+		@Override
+		public void accept(StopBuyOrder order) {
+			int price = exch.executeTrade(order);
+			creditAccount(order.getAccountId(), order, price);
+			log.info("Executed stop buy:"+order+" by "+price);
+		}};
+
+	Consumer<StopSellOrder> processorSell = new Consumer<StopSellOrder>(){
+		@Override
+		public void accept(StopSellOrder order) {
+			int price = exch.executeTrade(order);
+			creditAccount(order.getAccountId(), order, price);
+			log.info("Executed stop sell:"+order+" by "+price);
+		}};
+			
+	private void creditAccount(String accountId, Order order, int price) {
+		try {
+			acctMngr.getAccount(accountId).reflectOrder(order, price);
+		} catch (AccountException e) {
+			e.printStackTrace();
+		}
+	}
+		
 	public SimpleBroker(String name, AccountManager acctMngr, StockExchange exch) {
-		log.info("Creating a boker " + this.name);
+		log.info("Creating a broker " + this.name);
 		this.name = name;
 		this.acctMngr = acctMngr;
 		this.exch = exch;
 		if(exch!=null) {
-			for(String str:exch.getTickers()) {
-				if(orderManagerMap.containsValue(str)==false) {
-					orderManagerMap.put(str, new OrderManagerImpl(str));
-				}
+			for(String ticker:exch.getTickers()) {
+				orderManagerLookUp(ticker);
 			}
 		}
+		marketOrders.setOrderProcessor(processor);
+		marketOrders.setThreshold(exch.isOpen());
+		exch.addExchangeListener(this);
 	}
 
 	/*
@@ -89,12 +129,14 @@ public class SimpleBroker implements Broker {
 	@Override
 	public Account createAccount(String username, String password, int balance) throws BrokerException {
 		log.info("Creating an account " + username);
+		Account account;
 		try {
-			this.acctMngr.createAccount(username, password, balance);
+			account = acctMngr.createAccount(username, password, balance);
+			account.registerAccountManager(acctMngr);
 		} catch (AccountException e) {
 			throw new BrokerException("Problems with account creating ", e);
 		}
-		return null;
+		return account;
 	}
 
 	/**
@@ -132,14 +174,20 @@ public class SimpleBroker implements Broker {
 	 */
 	@Override
 	public Account getAccount(String username, String password) throws BrokerException {
-		Account accnt = new AccountImpl();
+		Account accnt = null;
 		try {
-			accnt = this.acctMngr.getAccount(username);
+			accnt = acctMngr.getAccount(username);
+			if(accnt==null) {
+				throw new BrokerException("Account is not exist");
+			}
+			accnt.registerAccountManager(acctMngr);
 		} catch (AccountException e) {
 			throw new BrokerException("Invalid account name " + username, e);
 		}
 		try {
-			this.acctMngr.validateLogin(username, password);
+			if(! acctMngr.validateLogin(username, password)) {
+				throw new BrokerException("Invalid password " + password + "for account " + username);
+			}
 		} catch (AccountException e) {
 			throw new BrokerException("Invalid password " + password + "for account " + username, e);
 		}
@@ -168,32 +216,33 @@ public class SimpleBroker implements Broker {
 	}
 
 	private void checkInvariants() {
-
 	}
 
 	public void exchangeClosed(ExchangeEvent event) {
-
+		marketOrders.setThreshold(false);
 	}
-
 
 	public void priceChanged(ExchangeEvent event) {
-
-	}
-	
-	public void exchangeOpen(ExchangeEvent event) {
-
+		OrderManager manager = orderManagerLookUp(event.getTicker());
+		if(manager!=null) {
+			manager.adjustPrice(event.getPrice());
+		}
 	}
 	
 	protected void initializeOrderManagers() {
-		
 	}
 
 	private OrderManager orderManagerLookUp(String ticker) {
-		return null;
-		
+		OrderManager manager = orderManagerMap.get(ticker);
+		if(manager==null) {
+			orderManagerMap.put(ticker, manager = new OrderManagerImpl(ticker, exch.getQuote(ticker).getPrice()));
+			manager.setBuyOrderProcessor(processorBuy);			
+			manager.setSellOrderProcessor(processorSell);			
+		}
+		return manager;
 	}
 	/**
-	 * Place a market buy order with the borker.
+	 * Place a market buy order with the broker.
 	 *
 	 * @param order
 	 *            the order being placed with the broker
@@ -204,8 +253,7 @@ public class SimpleBroker implements Broker {
 
 	@Override
 	public void placeOrder(MarketBuyOrder order) throws BrokerException {
-		// TODO Auto-generated method stub
-
+		marketOrders.enqueue(order);
 	}	
 	
 	/**
@@ -220,8 +268,7 @@ public class SimpleBroker implements Broker {
 
 	@Override
 	public void placeOrder(MarketSellOrder order) throws BrokerException {
-		// TODO Auto-generated method stub
-
+		marketOrders.enqueue(order);
 	}
 
 
@@ -238,8 +285,7 @@ public class SimpleBroker implements Broker {
 
 	@Override
 	public void placeOrder(StopBuyOrder order) throws BrokerException {
-		// TODO Auto-generated method stub
-
+		orderManagerLookUp(order.getStockTicker()).queueOrder(order);
 	}
 
 	/**
@@ -253,8 +299,7 @@ public class SimpleBroker implements Broker {
 	 */
 	@Override
 	public void placeOrder(StopSellOrder order) throws BrokerException {
-		// TODO Auto-generated method stub
-
+		orderManagerLookUp(order.getStockTicker()).queueOrder(order);
 	}
 
 	/**
@@ -266,8 +311,11 @@ public class SimpleBroker implements Broker {
 
 	@Override
 	public void close() throws BrokerException {
-		// TODO Auto-generated method stub
+	}
 
+	@Override
+	public void exchangeOpened(ExchangeEvent event) {
+		marketOrders.setThreshold(true);
 	}
 
 }

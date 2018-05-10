@@ -197,7 +197,11 @@ public class AccountImpl implements Account {
 	public void reflectOrder(Order order, int executionPrice) {
 		log.info("Reflect order for account "+this.name);
 		int balance = getBalance();
-		balance += executionPrice;
+		if(order.isBuyOrder()) {
+			balance -= executionPrice*order.getNumberOfShares();
+		} else {
+			balance += executionPrice*order.getNumberOfShares();
+		}
 		setBalance(balance);
 	}
 

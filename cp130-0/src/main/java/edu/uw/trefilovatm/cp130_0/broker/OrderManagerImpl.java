@@ -1,7 +1,9 @@
 package edu.uw.trefilovatm.cp130_0.broker;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiPredicate;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -19,6 +21,9 @@ public class OrderManagerImpl implements OrderManager {
 
 	private static Logger log = Logger.getLogger(OrderManagerImpl.class.getName());
 
+	private BiPredicate<Integer, StopBuyOrder> filterBuy;
+	private BiPredicate<Integer, StopSellOrder> filterStop;
+	
 	protected OrderQueueImpl<Integer, StopBuyOrder> stopBuyOrder;
 	protected OrderQueueImpl<Integer, StopSellOrder> stopSellOrder;
 	private String stockTickerSymbol;
@@ -27,13 +32,66 @@ public class OrderManagerImpl implements OrderManager {
 
 	public OrderManagerImpl(String stockTickerSymbol) {
 		this.stockTickerSymbol = stockTickerSymbol;
-		this.stopBuyOrder = new OrderQueueImpl<Integer, StopBuyOrder>(price, null); 
-		this.stopSellOrder = new OrderQueueImpl<Integer, StopSellOrder>(price, null);
 	}
 
 	public OrderManagerImpl(String stockTickerSymbol, int price) {
 		this.stockTickerSymbol = stockTickerSymbol;
 		this.price = price;
+		
+        final Comparator<StopBuyOrder> ascending = new Comparator<StopBuyOrder>() {
+			@Override
+			public int compare(StopBuyOrder order1, StopBuyOrder order2) {
+				if(order1.getPrice()<order2.getPrice()) {
+					return 1;
+				} else if(order1.getPrice()>order2.getPrice()) {
+					return -1;
+				} else {
+					if(order1.getOrderId()>order2.getOrderId()) {
+						return 1;
+					} else if(order1.getOrderId()<order2.getOrderId()) {
+						return -1;
+					}
+					return 0;
+				}
+			}
+        };
+        
+    	final Comparator<StopSellOrder> descending = new Comparator<StopSellOrder>() {
+			@Override
+			public int compare(StopSellOrder order1, StopSellOrder order2) {
+				if(order1.getPrice()>order2.getPrice()) {
+					return 1;
+				} else if(order1.getPrice()<order2.getPrice()) {
+					return -1;
+				} else {
+					if(order1.getOrderId()>order2.getOrderId()) {
+						return 1;
+					} else if(order1.getOrderId()<order2.getOrderId()) {
+						return -1;
+					}
+					return 0;
+				}
+			}
+        };
+        
+        filterBuy = new BiPredicate<Integer, StopBuyOrder>() {
+			@Override
+			public boolean test(Integer price, StopBuyOrder order) {
+				return order.getPrice()<=price;
+			}
+        };
+
+        filterStop = new BiPredicate<Integer, StopSellOrder>() {
+			@Override
+			public boolean test(Integer price, StopSellOrder order) {
+				return order.getPrice()>=price;
+			}
+        };
+        
+		this.stopBuyOrder = new OrderQueueImpl<Integer, StopBuyOrder>(price,  filterBuy, ascending);
+		this.stopSellOrder = new OrderQueueImpl<Integer, StopSellOrder>(price, filterStop, descending);
+		stopBuyOrder.setThreshold(price);
+		stopSellOrder.setThreshold(price);
 	}
 
 	/**
@@ -54,8 +112,9 @@ public class OrderManagerImpl implements OrderManager {
 	 */
 	@Override
 	public void adjustPrice(int price) {
-		// TODO Auto-generated method stub
-
+		this.price = price;
+		stopBuyOrder.setThreshold(price);
+		stopSellOrder.setThreshold(price);
 	}
 
 	/**
@@ -66,8 +125,7 @@ public class OrderManagerImpl implements OrderManager {
 	 */
 	@Override
 	public void queueOrder(StopBuyOrder order) {
-		// TODO Auto-generated method stub
-
+		stopBuyOrder.enqueue(order);
 	}
 
 	/**
@@ -78,8 +136,7 @@ public class OrderManagerImpl implements OrderManager {
 	 */
 	@Override
 	public void queueOrder(StopSellOrder order) {
-		// TODO Auto-generated method stub
-
+		stopSellOrder.enqueue(order);
 	}
 
 	/**
@@ -92,8 +149,7 @@ public class OrderManagerImpl implements OrderManager {
 	//lambda
 	@Override
 	public void setBuyOrderProcessor(Consumer<StopBuyOrder> processor) {
-		// TODO Auto-generated method stub
-
+		stopBuyOrder.setOrderProcessor(processor);
 	}
 
 	/**
@@ -106,8 +162,6 @@ public class OrderManagerImpl implements OrderManager {
 	//lambda
 	@Override
 	public void setSellOrderProcessor(Consumer<StopSellOrder> processor) {
-		// TODO Auto-generated method stub
-
+		stopSellOrder.setOrderProcessor(processor);
 	}
-
 }

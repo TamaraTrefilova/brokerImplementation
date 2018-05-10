@@ -48,6 +48,7 @@ public class AccountManagerImpl implements AccountManager {
 		setPasswordHash(password, account);
 		account.setBalance(balance);
 		dao.setAccount(account);
+		account.registerAccountManager(this);
 		return account;
 	}
 
@@ -79,6 +80,9 @@ public class AccountManagerImpl implements AccountManager {
 	public Account getAccount(String accountName) throws AccountException {
 		log.info("Retrieving account "+accountName);
 		Account account = dao.getAccount(accountName);
+		if(account !=null) {
+			account.registerAccountManager(this);
+		}
 		return account;
 	}
 
@@ -113,9 +117,13 @@ public class AccountManagerImpl implements AccountManager {
 		byte[] hashPasswd = account.getPasswordHash();
 		try {
 			byte[] calculatedHash = hashPassword(paswd);
-			return Arrays.equals(hashPasswd, calculatedHash);
+			boolean pswd = Arrays.equals(hashPasswd, calculatedHash); 
+			if(!pswd) {
+				return false;
+			}
+			return pswd;
 		} catch (NoSuchAlgorithmException | UnsupportedEncodingException e) {
-			throw new AccountException("Problems with hashing password", e);
+			throw new AccountException("Problems with hashing password",e);
 		}
 	}
 

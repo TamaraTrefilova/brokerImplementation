@@ -1,6 +1,8 @@
 package edu.uw.trefilovatm.cp130_0.broker;
 
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.List;
 import java.util.TreeSet;
 import java.util.function.BiPredicate;
 import java.util.function.Consumer;
@@ -30,21 +32,21 @@ import edu.uw.ext.framework.order.Order;
 public class OrderQueueImpl<T, E extends Order> implements OrderQueue<T, E> {
 	
 	private T threshold;
-	private  BiPredicate<T, E> fiter;
-	private  Comparator <E>comp;
+	private BiPredicate<T, E> filter;
+	private Comparator <E>comp;
 	private Consumer<E> orderProcessor;
-	private TreeSet queue;
+	private TreeSet<E> queue;
 	
-	public OrderQueueImpl(T treshhold, BiPredicate<T, E> fiter) {
+	public OrderQueueImpl(T treshhold, BiPredicate<T, E> filter) {
 		this.threshold =  treshhold;
-		this.fiter = fiter;
-		queue = new TreeSet<Order>();
+		this.filter = filter;
+		queue = new TreeSet<>();
 	}
 
-	public OrderQueueImpl(T treshhold, BiPredicate<T, E> fiter, Comparator <E>comp) {
+	public OrderQueueImpl(T treshhold, BiPredicate<T, E> filter, Comparator <E>comp) {
 		this.threshold =  treshhold;
-		this.fiter = fiter;
-		queue = new TreeSet<Order>(); 
+		this.filter = filter;
+		queue = new TreeSet<>(comp); 
 	}
 
 	public static void main(String[] args) {
@@ -69,8 +71,7 @@ public class OrderQueueImpl<T, E extends Order> implements OrderQueue<T, E> {
 	@Override
 	public void enqueue(E order) {
 		queue.add(order);
-		dispatchOrders();// TODO Auto-generated method stub
-
+		dispatchOrders();
 	}
 
 	/**
@@ -85,6 +86,13 @@ public class OrderQueueImpl<T, E extends Order> implements OrderQueue<T, E> {
 	@Override
 	public E dequeue() {
 		// TODO Auto-generated method stub
+		E order = null;
+		if(!queue.isEmpty()) {
+			order = queue.first();	
+			if(filter.test(threshold, order)) {
+				return queue.pollFirst();
+			} 
+		}
 		return null;
 	}
 
@@ -93,12 +101,22 @@ public class OrderQueueImpl<T, E extends Order> implements OrderQueue<T, E> {
 	 * in turn removed from the queue and passed to the callback. If no callback is
 	 * registered the order is simply removed from the queue.
 	 */
-
 	@Override
 	public void dispatchOrders() {
-		// TODO Auto-generated method stub
-
-	}
+		List<E> ordersToDispatch = new ArrayList<>();
+		for(E order:queue) {
+			if(filter.test(getThreshold(), order)) {
+				ordersToDispatch.add(order);
+			}
+		}
+		for(E order:ordersToDispatch) {
+			queue.remove(order);
+			if(orderProcessor!=null) {
+				orderProcessor.accept(order);
+			}			
+		}
+	}	
+	
 
 	/**
 	 * Registers the consumer to be used during order processing.
@@ -109,8 +127,7 @@ public class OrderQueueImpl<T, E extends Order> implements OrderQueue<T, E> {
 
 	@Override
 	public void setOrderProcessor(Consumer<E> proc) {
-		// TODO Auto-generated method stub
-
+		this.orderProcessor = proc;
 	}
 
 	/**

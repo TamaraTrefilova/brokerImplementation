@@ -21,6 +21,7 @@
   <bean id="AccountManagerFactory" class="edu.uw.trefilovatm.cp130_0.account.AccountManagerFactoryImpl"/>
 
   <!-- Bean providing implementation of edu.uw.ext.framework.account.DaoFactory -->
-  <bean id="DaoFactory" class="edu.uw.trefilovatm.cp130_0.account.JsonDaoFactoryImpl"/>
-  
+  <bean id="DaoFactory" class="edu.uw.trefilovatm.cp130_0.account.DaoFactoryImpl"/>
+  <!-- Bean implementing edu.uw.ext.framework.broker.BrokerFactory -->
+  <bean id="BrokerFactory" class="edu.uw.trefilovatm.cp130_0.broker.BrokerFactoryImpl"/>
 </beans>
