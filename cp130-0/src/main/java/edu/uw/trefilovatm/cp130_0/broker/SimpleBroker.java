@@ -12,7 +12,6 @@ import edu.uw.ext.framework.account.AccountManager;
 import edu.uw.ext.framework.broker.Broker;
 import edu.uw.ext.framework.broker.BrokerException;
 import edu.uw.ext.framework.broker.OrderManager;
-import edu.uw.ext.framework.broker.OrderQueue;
 import edu.uw.ext.framework.exchange.ExchangeEvent;
 import edu.uw.ext.framework.exchange.ExchangeListener;
 import edu.uw.ext.framework.exchange.StockExchange;
@@ -37,8 +36,8 @@ public class SimpleBroker implements Broker, ExchangeListener {
 	private String name;
 	private AccountManager acctMngr;
 	private StockExchange exch;
-	private Map<String, OrderManager> orderManagerMap = new HashMap<>();
-	private OrderQueue<Boolean, Order> marketOrders = new OrderQueueImpl<Boolean, Order>(false, 
+	private Map<String, OrderManagerImpl> orderManagerMap = new HashMap<>();
+	private AsyncOrderQueueImpl<Boolean, Order> marketOrders = new AsyncOrderQueueImpl<Boolean, Order>(false, 
 			new BiPredicate<Boolean, Order>() {
 				@Override
 				public boolean test(Boolean t, Order u) {
@@ -92,6 +91,7 @@ public class SimpleBroker implements Broker, ExchangeListener {
 		exch.addExchangeListener(this);
 	}
 
+	
 	/*
 	 * typo??
 	 */
@@ -233,7 +233,7 @@ public class SimpleBroker implements Broker, ExchangeListener {
 	}
 
 	private OrderManager orderManagerLookUp(String ticker) {
-		OrderManager manager = orderManagerMap.get(ticker);
+		OrderManagerImpl manager = orderManagerMap.get(ticker);
 		if(manager==null) {
 			orderManagerMap.put(ticker, manager = new OrderManagerImpl(ticker, exch.getQuote(ticker).getPrice()));
 			manager.setBuyOrderProcessor(processorBuy);			
@@ -311,6 +311,10 @@ public class SimpleBroker implements Broker, ExchangeListener {
 
 	@Override
 	public void close() throws BrokerException {
+		for(OrderManagerImpl manager:orderManagerMap.values()) {
+			manager.close();
+		};
+		marketOrders.close(); 
 	}
 
 	@Override

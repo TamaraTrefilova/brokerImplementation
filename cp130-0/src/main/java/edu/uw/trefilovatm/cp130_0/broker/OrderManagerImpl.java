@@ -8,6 +8,7 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 import edu.uw.ext.framework.broker.OrderManager;
+import edu.uw.ext.framework.broker.OrderQueue;
 import edu.uw.ext.framework.order.StopBuyOrder;
 import edu.uw.ext.framework.order.StopSellOrder;
 
@@ -24,11 +25,9 @@ public class OrderManagerImpl implements OrderManager {
 	private BiPredicate<Integer, StopBuyOrder> filterBuy;
 	private BiPredicate<Integer, StopSellOrder> filterStop;
 	
-	protected OrderQueueImpl<Integer, StopBuyOrder> stopBuyOrder;
-	protected OrderQueueImpl<Integer, StopSellOrder> stopSellOrder;
+	protected AsyncOrderQueueImpl<Integer, StopBuyOrder> stopBuyOrder;
+	protected AsyncOrderQueueImpl<Integer, StopSellOrder> stopSellOrder;
 	private String stockTickerSymbol;
-
-	private int price;
 
 	public OrderManagerImpl(String stockTickerSymbol) {
 		this.stockTickerSymbol = stockTickerSymbol;
@@ -36,7 +35,6 @@ public class OrderManagerImpl implements OrderManager {
 
 	public OrderManagerImpl(String stockTickerSymbol, int price) {
 		this.stockTickerSymbol = stockTickerSymbol;
-		this.price = price;
 		
         final Comparator<StopBuyOrder> ascending = new Comparator<StopBuyOrder>() {
 			@Override
@@ -88,8 +86,8 @@ public class OrderManagerImpl implements OrderManager {
 			}
         };
         
-		this.stopBuyOrder = new OrderQueueImpl<Integer, StopBuyOrder>(price,  filterBuy, ascending);
-		this.stopSellOrder = new OrderQueueImpl<Integer, StopSellOrder>(price, filterStop, descending);
+		this.stopBuyOrder = new AsyncOrderQueueImpl<Integer, StopBuyOrder>(price,  filterBuy, ascending);
+		this.stopSellOrder = new AsyncOrderQueueImpl<Integer, StopSellOrder>(price, filterStop, descending);
 		stopBuyOrder.setThreshold(price);
 		stopSellOrder.setThreshold(price);
 	}
@@ -112,7 +110,6 @@ public class OrderManagerImpl implements OrderManager {
 	 */
 	@Override
 	public void adjustPrice(int price) {
-		this.price = price;
 		stopBuyOrder.setThreshold(price);
 		stopSellOrder.setThreshold(price);
 	}
@@ -139,6 +136,11 @@ public class OrderManagerImpl implements OrderManager {
 		stopSellOrder.enqueue(order);
 	}
 
+	public void close() {
+		stopBuyOrder.close();
+		stopSellOrder.close();
+	}
+	
 	/**
 	 * Registers the processor to be used during buy order processing. This will be
 	 * passed on to the order queues as the dispatch callback.

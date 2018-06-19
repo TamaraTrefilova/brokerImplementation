@@ -5,6 +5,12 @@
        xsi:schemaLocation="http://www.springframework.org/schema/beans 
        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
 
+  <!-- Bean implementing framework.exchange.NetworkExchangeAdapterFactory -->
+  <bean id="NetworkExchangeAdapterFactory" class="edu.uw.trefilovatm.cp130_0.network.ExchangeAdapterFactoryImpl"/>
+
+  <!-- Bean implementing ...framework.exchange.NetworkExchangeProxyFactory -->
+  <bean id="NetworkExchangeProxyFactory" class="edu.uw.trefilovatm.cp130_0.network.ExchangeProxyFactoryImpl"/>
+  
   <!-- Bean implementing edu.uw.ext.framework.account.AccountFactory -->
   <bean id="AccountFactory" class="edu.uw.trefilovatm.cp130_0.account.AccountFactoryImpl"/>
 
@@ -24,4 +30,6 @@
   <bean id="DaoFactory" class="edu.uw.trefilovatm.cp130_0.account.DaoFactoryImpl"/>
   <!-- Bean implementing edu.uw.ext.framework.broker.BrokerFactory -->
   <bean id="BrokerFactory" class="edu.uw.trefilovatm.cp130_0.broker.BrokerFactoryImpl"/>
+  <!-- Bean implementing edu.uw.ext.framework.crypto.PrivateMessageCodec -->
+  <bean id="PrivateMessageCodec" class="edu.uw.trefilovatm.cp130_0.codec.PrivateMessageCodecImpl"/>
 </beans>

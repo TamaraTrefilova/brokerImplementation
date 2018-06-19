@@ -77,6 +77,7 @@ public class FilePersistor implements Persistor {
 	public void reset() throws AccountException {
 		log.info("Performing reset");
 		File f = new File(TARGET_ACCOUNTS);
+		f.mkdirs();
 		File[] files = f.listFiles();
 		for (File file : files) {
 			delete(file.getName());
